@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-scaler
+  namespace: openshift-monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-scaler
+  template:
+    metadata:
+      labels:
+        app: ai-scaler
+    spec:
+      serviceAccountName: ai-scaler
+      containers:
+      - name: ai-scaler
+        image: <your-registry>/ai-scaler:latest
+        imagePullPolicy: Always
+        args: ["python", "ai_scaler.py"]
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        securityContext:
+          runAsUser: 1000
+          allowPrivilegeEscalation: false

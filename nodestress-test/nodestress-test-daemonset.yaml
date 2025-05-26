@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: cpu-stresser
+  namespace: openshift-monitoring
+spec:
+  selector:
+    matchLabels:
+      app: cpu-stresser
+  template:
+    metadata:
+      labels:
+        app: cpu-stresser
+    spec:
+      containers:
+      - name: stress
+        image: polinux/stress
+        args: ["--cpu", "2"]
