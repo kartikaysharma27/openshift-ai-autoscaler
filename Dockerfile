@@ -1,4 +1,4 @@
-FROM python:3.11.8-slim
+FROM registry.access.redhat.com/ubi8/python-311
 WORKDIR /app
 COPY ai_nodescaler.py /app
 COPY requirements.txt /app
