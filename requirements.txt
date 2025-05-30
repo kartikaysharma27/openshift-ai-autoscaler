@@ -1,1 +1,4 @@
+kubernetes
+openshift
+urllib3
 requests

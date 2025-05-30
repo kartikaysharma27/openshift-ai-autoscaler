@@ -1,28 +1,61 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-scaler
-  namespace: openshift-monitoring
+  name: ai-node-autoscaler
+  namespace: your-namespace  # Replace with your actual namespace
+  labels:
+    app: ai-node-autoscaler
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ai-scaler
+      app: ai-node-autoscaler
   template:
     metadata:
       labels:
-        app: ai-scaler
+        app: ai-node-autoscaler
     spec:
-      serviceAccountName: ai-scaler
+      serviceAccountName: ai-autoscaler-sa
       containers:
-      - name: ai-scaler
-        image: <your-registry>/ai-scaler:latest
-        imagePullPolicy: Always
-        args: ["python", "ai_scaler.py"]
-        resources:
-          limits:
-            cpu: "500m"
-            memory: "512Mi"
-        securityContext:
-          runAsUser: 1000
-          allowPrivilegeEscalation: false
+        - name: ai-node-autoscaler
+          image: <your-quay-io-username>/ai-node-autoscaler:latest  # Replace with your image
+          imagePullPolicy: Always
+          env:
+            - name: MACHINESET_NAME
+              value: "<your-machineset-name>"  # Replace with your actual MachineSet name
+            - name: CHECK_INTERVAL
+              value: "60"
+            - name: CPU_THRESHOLD
+              value: "0.6"
+            - name: MEM_THRESHOLD
+              value: "0.6"
+            - name: NODE_USAGE_LIMIT
+              value: "0.5"
+            - name: MAX_REPLICAS
+              value: "10"
+          resources:
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 0
+            fsGroup: 0
+          readinessProbe:
+            exec:
+              command:
+                - cat
+                - /tmp/healthy
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          livenessProbe:
+            exec:
+              command:
+                - cat
+                - /tmp/healthy
+            initialDelaySeconds: 15
+            periodSeconds: 30
+      restartPolicy: Always
