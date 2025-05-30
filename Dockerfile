@@ -1,17 +1,19 @@
 FROM registry.access.redhat.com/ubi8/python-311
 
+# Set working directory
 WORKDIR /app
 
-COPY ai_scaler.py /app/ai_scaler.py
-COPY requirements.txt /app/requirements.txt
+# Copy application files
+COPY ai_scaler.py requirements.txt /app/
 
-# Use dnf to install packages, upgrade pip/setuptools, install python deps, then clean up
+# Install dependencies and clean up
 RUN dnf -y update && \
-dnf -y install gcc libffi-devel openssl-devel curl && \
-pip install --no-cache-dir --upgrade pip setuptools && \
-pip install --no-cache-dir -r /app/requirements.txt && \
-dnf -y remove gcc && \
-dnf clean all && \
-rm -rf /var/cache/dnf
+    dnf -y install gcc libffi-devel openssl-devel curl && \
+    pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir -r requirements.txt && \
+    dnf -y remove gcc && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
 
-CMD ["python", "/app/ai_scaler.py"]
+# Set default command
+CMD ["python", "ai_scaler.py"]
