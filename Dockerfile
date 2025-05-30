@@ -7,13 +7,8 @@ WORKDIR /app
 COPY ai_nodescaler.py requirements.txt /app/
 
 # Install dependencies and clean up
-RUN dnf -y update && \
-    dnf -y install gcc libffi-devel openssl-devel curl && \
-    pip install --no-cache-dir --upgrade pip setuptools && \
-    pip install --no-cache-dir -r requirements.txt && \
-    dnf -y remove gcc && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
-
+RUN pip install --no-cache-dir --upgrade pip setuptools && \
+    pip install --no-cache-dir -r requirements.txt 
+     
 # Set default command
 CMD ["python", "ai_nodescaler.py"]
