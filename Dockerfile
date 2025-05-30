@@ -4,7 +4,7 @@ FROM registry.access.redhat.com/ubi8/python-311
 WORKDIR /app
 
 # Copy application files
-COPY ai_scaler.py requirements.txt /app/
+COPY ai_nodescaler.py requirements.txt /app/
 
 # Install dependencies and clean up
 RUN dnf -y update && \
@@ -16,4 +16,4 @@ RUN dnf -y update && \
     rm -rf /var/cache/dnf
 
 # Set default command
-CMD ["python", "ai_scaler.py"]
+CMD ["python", "ai_nodescaler.py"]
