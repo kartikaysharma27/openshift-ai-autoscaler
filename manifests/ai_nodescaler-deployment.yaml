@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: ai-node-autoscaler
-  namespace: your-namespace  # Replace with your actual namespace
+  namespace: namespace  # Deployment namespace
   labels:
     app: ai-node-autoscaler
 spec:
@@ -18,11 +18,11 @@ spec:
       serviceAccountName: ai-autoscaler-sa
       containers:
         - name: ai-node-autoscaler
-          image: <your-quay-io-username>/ai-node-autoscaler:latest  # Replace with your image
+          image: <quay-io-username>/ai-node-autoscaler:latest  # podman image
           imagePullPolicy: Always
           env:
             - name: MACHINESET_NAME
-              value: "<your-machineset-name>"  # Replace with your actual MachineSet name
+              value: "<machineset-name>"  # Original MachineSet name
             - name: CHECK_INTERVAL
               value: "60"
             - name: CPU_THRESHOLD
@@ -46,16 +46,12 @@ spec:
             fsGroup: 0
           readinessProbe:
             exec:
-              command:
-                - cat
-                - /tmp/healthy
+              command: ["cat", "/tmp/healthy"]
             initialDelaySeconds: 10
             periodSeconds: 20
           livenessProbe:
             exec:
-              command:
-                - cat
-                - /tmp/healthy
+              command: ["cat", "/tmp/healthy"]
             initialDelaySeconds: 15
             periodSeconds: 30
       restartPolicy: Always
