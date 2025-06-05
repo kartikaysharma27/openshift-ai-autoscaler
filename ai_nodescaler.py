@@ -1,50 +1,57 @@
-import os                      # For reading environment variables
-import time                    # For adding delay between checks
-import requests                # For querying Prometheus API
-import urllib3                 # To suppress HTTPS warnings
-from kubernetes import client, config         # Kubernetes Python client
-from openshift.dynamic import DynamicClient   # For interacting with OpenShift APIs dynamically
+import os
+import time
+import requests
+import urllib3
+import numpy as np
+from collections import deque
+from sklearn.linear_model import LinearRegression
+from kubernetes import client, config
+from openshift.dynamic import DynamicClient
 
-# Suppress certificate warnings (since we use in-cluster CA cert)
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# --------------------- Configuration ---------------------
+# -- Configuration --
 
-CPU_THRESHOLD = 0.6            # If CPU usage > 60%
-MEM_THRESHOLD = 0.6            # If Memory usage > 60%
-NODE_USAGE_LIMIT = 0.5         # Trigger scaling if 50% or more nodes are overloaded
-CHECK_INTERVAL = 60            # Check every 60 seconds
-MAX_REPLICAS = 10              # Do not scale beyond this number
-
-# Prometheus query endpoint (inside OpenShift)
+CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "0.6"))
+MEM_THRESHOLD = float(os.getenv("MEM_THRESHOLD", "0.6"))
+NODE_USAGE_LIMIT = float(os.getenv("NODE_USAGE_LIMIT", "0.5"))
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "60"))
+MAX_REPLICAS = int(os.getenv("MAX_REPLICAS", "10"))
 PROM_URL = "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query"
 
-# These paths exist inside every pod with service account attached
 TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
 CA_CERT_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
 
-# MachineSet to scale (provided via environment variable)
 MACHINESET_NAME = os.environ.get("MACHINESET_NAME")
 NAMESPACE = "openshift-machine-api"
 
 if not MACHINESET_NAME:
     raise ValueError("MACHINESET_NAME environment variable is not set")
 
-# --------------------- Client Setup ---------------------
+# -- Client Setup --
 
-# Load Kubernetes config from inside the cluster
 config.load_incluster_config()
-
-# Create Kubernetes API client
 k8s_client = client.ApiClient()
-
-# Create dynamic OpenShift client
 dyn_client = DynamicClient(k8s_client)
 
-# --------------------- Prometheus Query Function ---------------------
+# -- AI Model --
+
+history_window = 5
+cpu_history = deque(maxlen=history_window)
+mem_history = deque(maxlen=history_window)
+
+def predict_next(values):
+    if len(values) < 2:
+        return values[-1] if values else 0
+    X = np.array(range(len(values))).reshape(-1, 1)
+    y = np.array(values)
+    model = LinearRegression().fit(X, y)
+    next_x = np.array([[len(values)]])
+    return float(model.predict(next_x))
+
+# -- Prometheus Query --
 
 def query_prometheus(query):
-    """Query Prometheus API securely using the pod's service account token."""
     try:
         token = open(TOKEN_PATH).read()
         headers = {"Authorization": f"Bearer {token}"}
@@ -55,10 +62,9 @@ def query_prometheus(query):
         print(f"[ERROR] Prometheus query failed: {e}")
         return []
 
-# --------------------- Node Usage Fetching ---------------------
+# -- Metrics --
 
 def get_node_usages():
-    """Return CPU and memory usage for each node as fractions (0.0 - 1.0)."""
     cpu_query = '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)'
     mem_query = '(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100'
 
@@ -77,10 +83,9 @@ def get_node_usages():
 
     return node_stats
 
-# --------------------- Current Replicas ---------------------
+# --Scaling --
 
 def get_current_replicas():
-    """Return the current number of replicas in the MachineSet."""
     try:
         ms_api = dyn_client.resources.get(api_version="machine.openshift.io/v1beta1", kind="MachineSet")
         ms = ms_api.get(name=MACHINESET_NAME, namespace=NAMESPACE)
@@ -89,10 +94,7 @@ def get_current_replicas():
         print(f"[ERROR] Could not get current replicas: {e}")
         return None
 
-# --------------------- Scale MachineSet ---------------------
-
 def scale_machineset(new_replicas):
-    """Scale the MachineSet to the desired number of replicas."""
     try:
         ms_api = dyn_client.resources.get(api_version="machine.openshift.io/v1beta1", kind="MachineSet")
         ms = ms_api.get(name=MACHINESET_NAME, namespace=NAMESPACE)
@@ -102,10 +104,9 @@ def scale_machineset(new_replicas):
     except Exception as e:
         print(f"[ERROR] Failed to scale MachineSet: {e}")
 
-# --------------------- Main Scaling Logic ---------------------
+# -- Main --
 
 def check_and_scale():
-    """Main logic to check resource usage and scale if needed."""
     print("[INFO] Checking node usage...")
     node_stats = get_node_usages()
 
@@ -113,20 +114,20 @@ def check_and_scale():
         print("[WARNING] No node data. Skipping scaling.")
         return
 
-    overloaded_nodes = [
-        node for node, usage in node_stats.items()
-        if usage.get("cpu", 0) > CPU_THRESHOLD and usage.get("mem", 0) > MEM_THRESHOLD
-    ]
+    avg_cpu = np.mean([usage["cpu"] for usage in node_stats.values()])
+    avg_mem = np.mean([usage["mem"] for usage in node_stats.values()])
 
-    total_nodes = len(node_stats)
-    overloaded_count = len(overloaded_nodes)
-    print(f"[INFO] {overloaded_count} of {total_nodes} nodes are overloaded.")
+    cpu_history.append(avg_cpu)
+    mem_history.append(avg_mem)
 
-    if total_nodes == 0:
-        print("[WARNING] No nodes found.")
-        return
+    # ⬇️ AI prediction with clamping between 0 and 1.0
+    predicted_cpu = min(1.0, max(0, predict_next(list(cpu_history))))
+    predicted_mem = min(1.0, max(0, predict_next(list(mem_history))))
 
-    if overloaded_count / total_nodes >= NODE_USAGE_LIMIT:
+    print(f"[INFO] Avg CPU: {avg_cpu:.2f}, Avg MEM: {avg_mem:.2f}")
+    print(f"[AI] Predicted CPU: {predicted_cpu:.2f}, Predicted MEM: {predicted_mem:.2f}")
+
+    if predicted_cpu > CPU_THRESHOLD and predicted_mem > MEM_THRESHOLD:
         current_replicas = get_current_replicas()
         if current_replicas is None:
             print("[ERROR] Cannot read current replica count.")
@@ -140,12 +141,10 @@ def check_and_scale():
         print(f"[INFO] Scaling from {current_replicas} to {new_replicas} replicas.")
         scale_machineset(new_replicas)
     else:
-        print("[INFO] Cluster usage is within limits. No scaling needed.")
-
-# --------------------- Loop Forever ---------------------
+        print("[INFO] Cluster usage is within predicted limits. No scaling needed.")
 
 if __name__ == "__main__":
-    print("[INFO] OpenShift Autoscaler agent started.")
+    print("[INFO] OpenShift AI Autoscaler agent started.")
     while True:
         try:
             check_and_scale()
