@@ -10,8 +10,6 @@ from openshift.dynamic import DynamicClient
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# -- Configuration --
-
 CPU_THRESHOLD = float(os.getenv("CPU_THRESHOLD", "0.6"))
 MEM_THRESHOLD = float(os.getenv("MEM_THRESHOLD", "0.6"))
 NODE_USAGE_LIMIT = float(os.getenv("NODE_USAGE_LIMIT", "0.5"))
@@ -28,13 +26,9 @@ NAMESPACE = "openshift-machine-api"
 if not MACHINESET_NAME:
     raise ValueError("MACHINESET_NAME environment variable is not set")
 
-# -- Client Setup --
-
 config.load_incluster_config()
 k8s_client = client.ApiClient()
 dyn_client = DynamicClient(k8s_client)
-
-# -- AI Model --
 
 history_window = 5
 cpu_history = deque(maxlen=history_window)
@@ -49,7 +43,6 @@ def predict_next(values):
     next_x = np.array([[len(values)]])
     return float(model.predict(next_x))
 
-# -- Prometheus Query --
 
 def query_prometheus(query):
     try:
@@ -62,7 +55,6 @@ def query_prometheus(query):
         print(f"[ERROR] Prometheus query failed: {e}")
         return []
 
-# -- Metrics --
 
 def get_node_usages():
     cpu_query = '100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[2m])) * 100)'
@@ -83,7 +75,6 @@ def get_node_usages():
 
     return node_stats
 
-# --Scaling --
 
 def get_current_replicas():
     try:
@@ -104,8 +95,6 @@ def scale_machineset(new_replicas):
     except Exception as e:
         print(f"[ERROR] Failed to scale MachineSet: {e}")
 
-# -- Main --
-
 def check_and_scale():
     print("[INFO] Checking node usage...")
     node_stats = get_node_usages()
@@ -120,7 +109,7 @@ def check_and_scale():
     cpu_history.append(avg_cpu)
     mem_history.append(avg_mem)
 
-    # ⬇️ AI prediction with clamping between 0 and 1.0
+    # AI prediction with clamping between 0 and 1.0
     predicted_cpu = min(1.0, max(0, predict_next(list(cpu_history))))
     predicted_mem = min(1.0, max(0, predict_next(list(mem_history))))
 
