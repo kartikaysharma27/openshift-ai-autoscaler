@@ -3,8 +3,6 @@ kind: Deployment
 metadata:
   name: ai-nodescaler
   namespace: openshift-ai-nodescaler
-  labels:
-    app: ai-nodescaler
 spec:
   replicas: 1
   selector:
@@ -20,6 +18,9 @@ spec:
         - name: ai-nodescaler
           image: <your-registry>/openshift-ai-nodescaler:latest
           imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: metrics
           env:
             - name: CHECK_INTERVAL
               value: "60"
@@ -31,6 +32,8 @@ spec:
               value: "0.5"
             - name: MAX_REPLICAS
               value: "10"
+            - name: PROM_URL
+              value: "https://prometheus-k8s.openshift-monitoring.svc:9091/api/v1/query"
           resources:
             limits:
               cpu: "200m"
