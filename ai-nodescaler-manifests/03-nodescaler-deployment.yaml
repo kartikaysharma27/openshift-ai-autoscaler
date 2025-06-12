@@ -1,28 +1,26 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ai-node-autoscaler
-  namespace: namespace  # Deployment namespace
+  name: ai-nodescaler
+  namespace: openshift-ai-nodescaler
   labels:
-    app: ai-node-autoscaler
+    app: ai-nodescaler
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ai-node-autoscaler
+      app: ai-nodescaler
   template:
     metadata:
       labels:
-        app: ai-node-autoscaler
+        app: ai-nodescaler
     spec:
-      serviceAccountName: ai-autoscaler-sa
+      serviceAccountName: ai-nodescaler-sa
       containers:
-        - name: ai-node-autoscaler
-          image: <quay-io-username>/ai-node-autoscaler:latest  # podman image
+        - name: ai-nodescaler
+          image: <your-registry>/openshift-ai-nodescaler:latest
           imagePullPolicy: Always
           env:
-            - name: MACHINESET_NAME
-              value: "<machineset-name>"  # Original MachineSet name
             - name: CHECK_INTERVAL
               value: "60"
             - name: CPU_THRESHOLD
@@ -40,10 +38,6 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
-          securityContext:
-            runAsUser: 1000
-            runAsGroup: 0
-            fsGroup: 0
           readinessProbe:
             exec:
               command: ["cat", "/tmp/healthy"]
@@ -54,4 +48,3 @@ spec:
               command: ["cat", "/tmp/healthy"]
             initialDelaySeconds: 15
             periodSeconds: 30
-      restartPolicy: Always
